@@ -22,10 +22,27 @@ CURRENT_USER=$(whoami)
 USER_HOME=$HOME
 
 echo "----------------------------------------"
-echo "Installing cloudflared"
+echo "Detecting System Architecture & Installing"
 echo "----------------------------------------"
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-sudo dpkg -i cloudflared-linux-amd64.deb
+ARCH=$(uname -m)
+echo "Detected architecture: $ARCH"
+
+if [ "$ARCH" = "x86_64" ]; then
+    DEB_FILE="cloudflared-linux-amd64.deb"
+elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+    DEB_FILE="cloudflared-linux-arm64.deb"
+elif [ "$ARCH" = "armv7l" ]; then
+    DEB_FILE="cloudflared-linux-armhf.deb"
+else
+    echo "Error: Unsupported architecture ($ARCH). Please install manually."
+    exit 1
+fi
+
+DOWNLOAD_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/$DEB_FILE"
+
+echo "Downloading $DEB_FILE..."
+wget -q --show-progress $DOWNLOAD_URL
+sudo dpkg -i $DEB_FILE
 
 echo "----------------------------------------"
 echo "Login with account"
