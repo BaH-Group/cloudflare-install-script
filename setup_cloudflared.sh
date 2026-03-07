@@ -14,6 +14,9 @@ echo ""
 echo "IMPORTANT: The hostname must be a domain or subdomain you already manage in Cloudflare."
 read -p "Enter the hostname to route (e.g., ssh.medikai.uz): " HOST_NAME
 
+echo ""
+read -p "Enter the SSH username you will use to log into this server (e.g., root, ubuntu): " SSH_USER
+
 # Determine the current user's home directory for the credentials file
 CURRENT_USER=$(whoami)
 USER_HOME=$HOME
@@ -21,19 +24,19 @@ USER_HOME=$HOME
 echo "----------------------------------------"
 echo "Installing cloudflared"
 echo "----------------------------------------"
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb [cite: 6, 7]
-sudo dpkg -i cloudflared-linux-amd64.deb [cite: 8]
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
 
 echo "----------------------------------------"
 echo "Login with account"
 echo "----------------------------------------"
 echo "Please click the link generated below to authorize your account in the browser."
-cloudflared tunnel login [cite: 9, 10]
+cloudflared tunnel login
 
 echo "----------------------------------------"
 echo "Creating tunnel '$TUNNEL_NAME'"
 echo "----------------------------------------"
-cloudflared tunnel create $TUNNEL_NAME [cite: 11, 12]
+cloudflared tunnel create $TUNNEL_NAME
 
 # Automatically fetch the newly created Tunnel ID
 TUNNEL_ID=$(cloudflared tunnel list | grep -w "$TUNNEL_NAME" | awk '{print $1}')
@@ -47,35 +50,42 @@ echo "Retrieved Tunnel ID: $TUNNEL_ID"
 echo "----------------------------------------"
 echo "Creating config file to redirect"
 echo "----------------------------------------"
-sudo mkdir -p /etc/cloudflared [cite: 13, 14]
+sudo mkdir -p /etc/cloudflared
 
 # Generating the YAML config dynamically 
 sudo tee /etc/cloudflared/config.yml > /dev/null <<EOF
-tunnel: $TUNNEL_ID [cite: 16, 17]
-credentials-file: $USER_HOME/.cloudflared/$TUNNEL_ID.json [cite: 18]
-ingress: [cite: 19]
-  - hostname: $HOST_NAME [cite: 20]
-    service: ssh://localhost:22 [cite: 21]
-  - service: http_status:404 [cite: 22]
+tunnel: $TUNNEL_ID
+credentials-file: $USER_HOME/.cloudflared/$TUNNEL_ID.json
+ingress:
+  - hostname: $HOST_NAME
+    service: ssh://localhost:22
+  - service: http_status:404
 EOF
 
 echo "----------------------------------------"
 echo "Creating DNS Route"
 echo "----------------------------------------"
-cloudflared tunnel route dns $TUNNEL_NAME $HOST_NAME [cite: 23, 24]
+cloudflared tunnel route dns $TUNNEL_NAME $HOST_NAME
 
 echo "----------------------------------------"
 echo "Service install & start"
 echo "----------------------------------------"
-sudo cloudflared service install [cite: 27, 28]
-sudo systemctl start cloudflared [cite: 29]
-sudo systemctl enable cloudflared [cite: 30]
+sudo cloudflared service install
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
 
 echo "Checking service status..."
-sudo systemctl status cloudflared --no-pager [cite: 31]
+sudo systemctl status cloudflared --no-pager
 
-echo "----------------------------------------"
-echo "Testing Logs"
-echo "----------------------------------------"
+echo "=================================================================="
+echo "✅ SETUP COMPLETE!"
+echo "=================================================================="
+echo "To connect to this server from your local machine, ensure you have"
+echo "cloudflared installed locally, then run the following command:"
+echo ""
+echo "ssh -o ProxyCommand=\"cloudflared access ssh --hostname $HOST_NAME\" $SSH_USER@$HOST_NAME"
+echo ""
+echo "=================================================================="
+
 echo "Displaying real-time logs. Press Ctrl+C to exit."
-journalctl -u cloudflared -f [cite: 32, 33]
+journalctl -u cloudflared -f
