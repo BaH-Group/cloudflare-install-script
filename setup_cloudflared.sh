@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "------------------------------------------------"
-echo "Cloudflared Auto-Installer"
+echo "Cloudflared Auto-Installer with SSH Check"
 echo "------------------------------------------------"
 
 # 1. Verify Admin Access
@@ -13,7 +13,26 @@ read -p "Enter Full Hostname (e.g., ssh10.medikai.uz): " HOST_NAME
 read -p "Enter SSH User on server (e.g., pi): " SSH_USER
 read -p "Enter a Nickname for local SSH config (e.g., trash): " NICKNAME
 
-# 3. Detect Architecture and Install
+# 3. Check and Install OpenSSH Server
+echo "------------------------------------------------"
+echo "Checking OpenSSH Server status..."
+echo "------------------------------------------------"
+if ! command -v sshd > /dev/null 2>&1; then
+    echo "OpenSSH server is not installed. Installing now..."
+    sudo apt update
+    sudo apt install -y openssh-server
+else
+    echo "OpenSSH server is already installed."
+fi
+
+# Ensure the SSH service is running so the tunnel has something to connect to
+sudo systemctl start ssh || sudo systemctl start sshd
+sudo systemctl enable ssh || sudo systemctl enable sshd
+
+# 4. Detect Architecture and Install Cloudflared
+echo "------------------------------------------------"
+echo "Installing Cloudflared"
+echo "------------------------------------------------"
 ARCH=$(uname -m)
 if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
     DEB_FILE="cloudflared-linux-arm64.deb"
@@ -22,19 +41,20 @@ else
 fi
 
 echo "Detected architecture: $ARCH. Downloading $DEB_FILE..."
-# Ensure any corrupted previous downloads are removed
 rm -f "$DEB_FILE"
-wget -q --show-progress "https://github.com/cloudflare/cloudflared/releases/latest/download/$DEB_FILE"
+wget -q --show-progress "https://github.com/cloudflare/cloudflared/releases/latest/download/$DEB_FILE" [cite: 6, 7]
 
-echo "Installing cloudflared..."
-sudo dpkg -i "$DEB_FILE"
+sudo dpkg -i "$DEB_FILE" [cite: 8]
 
-# 4. Tunnel Authentication and Creation
+# 5. Tunnel Authentication and Creation
+echo "------------------------------------------------"
+echo "Authenticating and Creating Tunnel"
+echo "------------------------------------------------"
 echo "Please follow the link below to login:"
-cloudflared tunnel login
+cloudflared tunnel login [cite: 9, 10]
 
 echo "Creating tunnel..."
-cloudflared tunnel create "$TUNNEL_NAME"
+cloudflared tunnel create "$TUNNEL_NAME" [cite: 11, 12]
 
 # Get the Tunnel ID automatically
 TUNNEL_ID=$(cloudflared tunnel list | grep -w "$TUNNEL_NAME" | awk '{print $1}')
@@ -43,26 +63,28 @@ if [ -z "$TUNNEL_ID" ]; then
     exit 1
 fi
 
-# 5. Create Configuration
-echo "Creating configuration file..."
-sudo mkdir -p /etc/cloudflared
+# 6. Create Configuration
+echo "------------------------------------------------"
+echo "Creating routing configuration..."
+echo "------------------------------------------------"
+sudo mkdir -p /etc/cloudflared [cite: 13, 14]
 sudo tee /etc/cloudflared/config.yml > /dev/null <<EOF
-tunnel: $TUNNEL_ID
-credentials-file: $HOME/.cloudflared/$TUNNEL_ID.json
-ingress:
-  - hostname: $HOST_NAME
-    service: ssh://localhost:22
-  - service: http_status:404
+tunnel: $TUNNEL_ID [cite: 16, 17]
+credentials-file: $HOME/.cloudflared/$TUNNEL_ID.json [cite: 18]
+ingress: [cite: 19]
+  - hostname: $HOST_NAME [cite: 20]
+    service: ssh://localhost:22 [cite: 21]
+  - service: http_status:404 [cite: 22]
 EOF
 
-# 6. Route DNS and Start Service
+# 7. Route DNS and Start Service
 echo "Routing DNS..."
-cloudflared tunnel route dns "$TUNNEL_NAME" "$HOST_NAME"
+cloudflared tunnel route dns "$TUNNEL_NAME" "$HOST_NAME" [cite: 23, 24]
 
 echo "Installing and starting service..."
-sudo cloudflared service install
-sudo systemctl start cloudflared
-sudo systemctl enable cloudflared
+sudo cloudflared service install [cite: 27, 28]
+sudo systemctl start cloudflared [cite: 29]
+sudo systemctl enable cloudflared [cite: 30]
 
 echo "------------------------------------------------"
 echo "✅ SERVER SETUP COMPLETE"
@@ -82,6 +104,7 @@ echo "------------------------------------------------"
 echo "ssh -o ProxyCommand=\"cloudflared access ssh --hostname $HOST_NAME\" $SSH_USER@$HOST_NAME"
 echo "------------------------------------------------"
 
-# 7. Show Status and Logs
-sudo systemctl status cloudflared --no-pager
-journalctl -u cloudflared -f
+# 8. Show Status and Logs
+sudo systemctl status cloudflared --no-pager [cite: 31]
+echo "Showing live logs (Press Ctrl+C to exit):"
+journalctl -u cloudflared -f [cite: 32, 33]
